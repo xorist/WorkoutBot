@@ -91,45 +91,69 @@ async function updateRoster() {
 
     // get workouts from database for this week, from Sunday to Saturday.
     let workouts = [];
-    let date = moment().startOf('week').format('MM/DD/YYYY');
-    console.log(date);
-    for(let i = 1; i < 7; i++) {
-        db.get(`SELECT * FROM workouts`, (err, row) => {
-            console.log(row);
-            if (err) {
-                return console.error(err.message);
-            }
-            if(row) {
-                workouts.push(row);
-            }
+    let sql = `SELECT * FROM workouts WHERE date BETWEEN ? AND ?`;
+    let startdate = moment().startOf('week').format('MM/DD/YYYY');
+    let enddate = moment().endOf('week').format('MM/DD/YYYY');
+    
+    function queryDatabase(startdate, enddate) {
+      return new Promise((resolve, reject) => {
+        db.all(sql, [startdate, enddate], (err, rows) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve(rows);
         });
-        date = moment(date).add(1, 'days').format('MM/DD/YYYY');
-        console.log(date)
+      });
     }
+    
+    async function yourAsyncFunction() {
+      try {
+        const rows = await queryDatabase(startdate, enddate);
+        workouts.push(...rows);
+      } catch (err) {
+        console.error(err.message);
+      }
+      
+      // Now that the database operation is complete, log the workouts
+      console.log(workouts);
 
-    // close database
-    db.close();
-
-    // create roster formatted where the users who've completed a workout are listed next to the name of the day of the week.
-    let roster = "```diff\n";
-    date = moment().startOf('week').format('MM/DD/YYYY');
-    for(let i = 0; i < 7; i++) {
-        roster += moment(date).format('dddd') + ": ";
-        for(let j = 0; j < workouts.length; j++) {
-            console.log(workouts[j].date + " " + workouts[j].name);
-            if(workouts[j].date === date) {
-                roster += workouts[j].name + ", ";
-            }
-        }
-        roster += "\n";
-        date = moment(date).add(1, 'days').format('MM/DD/YYYY');
-    }
-    roster += "```";
+          // create roster formatted where the users who've completed a workout are listed next to the name of the day of the week.
+          let roster = "```diff\n";
+          let date = moment().startOf('week').format('MM/DD/YYYY');
+          
+          for (let i = 0; i < 7; i++) {
+              let dayWorkouts = [];
+              roster += moment(date).format('dddd') + ": ";
+          
+              for (let j = 0; j < workouts.length; j++) {
+                  if (workouts[j].date === date) {
+                      dayWorkouts.push(workouts[j].name);
+                  }
+              }
+              
+              // Join the workouts with a comma and append to roster
+              roster += dayWorkouts.join(", ");
+              
+              roster += "\n";
+              date = moment(date).add(1, 'days').format('MM/DD/YYYY');
+          }
+          roster += "```";
+          
 
     // update roster message
     await client.rest.channels.editMessage(process.env.CHANNEL, rosterMessageID, {
         content: roster,
     });
+    }
+    
+    // Invoke the function
+    yourAsyncFunction();
+    
+
+    db.close();
+
+
 
 
 }
@@ -202,7 +226,7 @@ client.on("interactionCreate", async (interaction) => {
                             });
                             break;
                         }
-                        // update SQLite Databse with new workout and user's name as parameters
+                        // update SQLite Database with new workout and user's name as parameters
                         updateDatabase(date, interaction.member.user.username, option.name);
 
                         await interaction.createFollowup({
@@ -229,7 +253,7 @@ client.on("interactionCreate", async (interaction) => {
                             });
                             break;
                         }
-                        updateDatabse(date, interaction.member.user.username, option.name);
+                        updateDatabase(date, interaction.member.user.username, option.name);
                         await interaction.createFollowup({
                             content: "Workout removed! (If something is wrong, please make sure you used the following date format: MM/DD/YYYY)",
                         });
