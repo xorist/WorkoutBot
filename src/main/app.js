@@ -5,23 +5,46 @@ const {
     InteractionTypes,
     } = require("oceanic.js");
 require("dotenv").config();
+const moment = require('moment');
+const sqlite3 = require('sqlite3').verbose();
+
 const client = new Client({
     auth: "Bot " + process.env.TOKEN,
 });
-const moment = require('moment');
-const sqlite3 = require('sqlite3').verbose();
 
 // constants
 const guildId = "781817599931056160";
 const regex = /^\d{2}\/\d{2}\/\d{4}$/;
 
-client.on("ready", async () => {
-// On bot ready
+// Get the date of the next Sunday
+function getNextSunday() {
+    const now = new Date();
+    const nextSunday = new Date(now);
+    nextSunday.setDate(now.getDate() + (7 - now.getDay()) % 7);
+    nextSunday.setHours(0, 0, 0, 0);
+    return nextSunday;
+}
 
-await registerCommands();
-console.log("Ready!");
+// Schedule beginning of the week roster reset
+function scheduleUpdateRoster() {
+    const nextSunday = getNextSunday();
+    const now = new Date();
+    const timeToNextSunday = nextSunday - now;
+  
+    setTimeout(() => {
+        updateRoster();  // Run the function once
+        setInterval(updateRoster, 7 * 24 * 60 * 60 * 1000);  // Then schedule it to run every week
+    }, timeToNextSunday);
+}
+
+// Initialize and run startup procedures
+client.on("ready", async () => {
+    await registerCommands();
+    scheduleUpdateRoster();
+    console.log("Ready!");
 });
 
+// Define commands
 async function registerCommands() {
 await client.application.createGlobalCommand({
     name: "workout",
@@ -58,6 +81,7 @@ await client.application.createGlobalCommand({
 });
 }
 
+// update the roster message
 async function updateRoster() {
     // check if message from bot already exists
     rosterMessageID = 0;
@@ -148,20 +172,16 @@ async function updateRoster() {
     }
     
     // Invoke the function
-    yourAsyncFunction();
+    await yourAsyncFunction();
     
-
     db.close();
-
-
-
 
 }
 
 async function updateDatabase(date, name, action) {
     let db = new sqlite3.Database('./workouts.db', (err) => {
         if (err) {
-          console.error(err.message);
+            console.error(err.message);
         }
     });
 
@@ -272,7 +292,7 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 client.on("error", (err) => {
-console.error("Something Broke!", err);
+    console.error("Something Broke!", err);
 });
 
 client.connect();
